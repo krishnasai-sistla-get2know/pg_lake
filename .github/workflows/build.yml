@@ -2,15 +2,15 @@ name: Build and Publish pg_lake Docker Image
 
 on:
   schedule:
-    # Run every day at UTC midnight
-    - cron: "0 0 * * *"
+    # Run once a week Sunday at UTC midnight
+    - cron: "0 0 * * SUN"
   # Allows manual triggering
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/pg_lake-postgres:latest
-  PGDUCK_IMAGE_NAME: ${{ github.repository_owner }}/pgduck-server:latest
+  IMAGE_NAME: ${{ github.repository_owner }}/pg_lake-postgres
+  PGDUCK_IMAGE_NAME: ${{ github.repository_owner }}/pgduck-server
 
 jobs:
   build-push-cleanup-release:
@@ -37,33 +37,43 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Clean up space on runner
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/lib/android
+          sudo apt-get clean
+
       - name: Build pg_lake-postgres
         working-directory: ./pg_lake/docker
         run: docker compose build
 
       - name: Tag the pg_lake-postgres image for GitHub packages
         run: |
-          IMAGE_ID=docker-pg_lake-postgres:latest
+          IMAGE_ID=docker-pg_lake-postgres
           VERSION="latest"
-          docker tag $IMAGE_ID ${{ env.REGISTRY }}/pg_lake-postgres:latest
+          docker tag $IMAGE_ID:${VERSION} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          docker rmi $IMAGE_ID:${VERSION}
 
       - name: Push pg_lake-postgres Docker image
         id: push
         run: |
-          DIGEST=$(docker push ${{ env.REGISTRY }}/pg_lake-postgres:latest | grep digest | awk '{print $3}')
+          DIGEST=$(docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | grep digest | awk '{print $3}')
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
           echo "Pushed image with digest: $DIGEST"
 
       - name: Tag the pgduck-server image for GitHub packages
         run: |
-          IMAGE_ID=docker-pgduck-server:latest
+          IMAGE_ID=docker-pgduck-server
           VERSION="latest"
-          docker tag $IMAGE_ID ${{ env.REGISTRY }}/pgduck-server:latest
+          docker tag $IMAGE_ID:${VERSION} ${{ env.REGISTRY }}/${{ env.PGDUCK_IMAGE_NAME }}:${VERSION}
+          docker rmi $IMAGE_ID:${VERSION}
 
       - name: Push pgduck-server Docker image
         id: pgduck_push
         run: |
-          DIGEST=$(docker push ${{ env.REGISTRY }}/pgduck-server:latest | grep digest | awk '{print $3}')
+          DIGEST=$(docker push ${{ env.REGISTRY }}/${{ env.PGDUCK_IMAGE_NAME }}:latest | grep digest | awk '{print $3}')
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
           echo "Pushed image with digest: $DIGEST"
 
@@ -96,34 +106,3 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.PGDUCK_IMAGE_NAME }}
           subject-digest: ${{ steps.pgduck_push.outputs.digest }}
           push-to-registry: true
-
-      - name: Check if release exists
-        id: check-release
-        run: |
-          VERSION="latest"
-          echo "Checking if release with tag $VERSION exists..."
-          RELEASE_INFO=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$VERSION")
-          if [[ $RELEASE_INFO == *"Not Found"* ]]; then
-            echo "No existing release found with tag $VERSION"
-            echo "should_create=true" >> $GITHUB_OUTPUT
-          else
-            echo "Release with tag $VERSION already exists"
-            echo "should_create=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create Release
-        id: create-release
-        if: steps.check-release.outputs.should_create == 'true'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.polaris-version.outputs.version }}
-          release_name: Release ${{ steps.polaris-version.outputs.version }}
-          draft: false
-          prerelease: false
-          body: |
-            Release of [pg_lake](https://github.com/Snowflake-Labs/pg_lake) version ${{ steps.polaris-version.outputs.version }}
-            See [Packages](https://github.com/${{ github.repository_owner }}?tab=packages&repo_name=pg_lake)
-            See [CHANGELOG](https://github.com/Snowflake-Labs/pg_lake/commits) for details.
