@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/pg_lake-postgres
+  IMAGE_NAME: ${{ github.repository_owner }}/pg_lake
   PGDUCK_IMAGE_NAME: ${{ github.repository_owner }}/pgduck-server
 
 jobs:
@@ -29,6 +29,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
+      - name: Install Task
+        uses: go-task/setup-task@v1
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -45,18 +48,20 @@ jobs:
           sudo rm -rf /usr/local/lib/android
           sudo apt-get clean
 
-      - name: Build pg_lake-postgres
+      - name: Build pg_lake
         working-directory: ./pg_lake/docker
-        run: docker compose build
-
-      - name: Tag the pg_lake-postgres image for GitHub packages
         run: |
-          IMAGE_ID=docker-pg_lake-postgres
-          VERSION="latest"
-          docker tag $IMAGE_ID:${VERSION} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+          task build:local
+          docker image ls
+
+      - name: Tag the pg_lake image for GitHub packages
+        run: |
+          IMAGE_ID=pg_lake
+          VERSION="local-pg18-almalinux"
+          docker tag $IMAGE_ID:${VERSION} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           docker rmi $IMAGE_ID:${VERSION}
 
-      - name: Push pg_lake-postgres Docker image
+      - name: Push pg_lake Docker image
         id: push
         run: |
           DIGEST=$(docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest | grep digest | awk '{print $3}')
@@ -65,9 +70,9 @@ jobs:
 
       - name: Tag the pgduck-server image for GitHub packages
         run: |
-          IMAGE_ID=docker-pgduck-server
-          VERSION="latest"
-          docker tag $IMAGE_ID:${VERSION} ${{ env.REGISTRY }}/${{ env.PGDUCK_IMAGE_NAME }}:${VERSION}
+          IMAGE_ID=pgduck-server
+          VERSION="local-pg18-almalinux"
+          docker tag $IMAGE_ID:${VERSION} ${{ env.REGISTRY }}/${{ env.PGDUCK_IMAGE_NAME }}:latest
           docker rmi $IMAGE_ID:${VERSION}
 
       - name: Push pgduck-server Docker image
@@ -80,7 +85,7 @@ jobs:
       - name: Delete older package versions
         uses: actions/delete-package-versions@v5
         with:
-          package-name: "pg_lake-postgres"
+          package-name: "pg_lake"
           package-type: "container"
           min-versions-to-keep: 1 # Keep only the most recent version
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -93,7 +98,7 @@ jobs:
           min-versions-to-keep: 1 # Keep only the most recent version
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate artifact attestation for pg_lake-postgres
+      - name: Generate artifact attestation for pg_lake
         uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
