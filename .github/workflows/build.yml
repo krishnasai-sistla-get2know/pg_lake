@@ -51,8 +51,11 @@ jobs:
       - name: Build pg_lake
         working-directory: ./pg_lake/docker
         run: |
+          sed -i '260i\
+          RUN git clone https://github.com/crunchydata/pg_incremental.git /home/postgres/pg_incremental' Dockerfile
+          sed -i '276i\
+          RUN cd pg_incremental && make && PATH=$PATH make install' Dockerfile
           task build:local
-          docker image ls
 
       - name: Tag the pg_lake image for GitHub packages
         run: |
