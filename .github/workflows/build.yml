@@ -102,14 +102,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate artifact attestation for pg_lake
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
       - name: Generate artifact attestation for pgduck-server
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.PGDUCK_IMAGE_NAME }}
           subject-digest: ${{ steps.pgduck_push.outputs.digest }}
